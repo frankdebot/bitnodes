@@ -33,7 +33,7 @@ Reference: https://en.bitcoin.it/wiki/Protocol_specification
                      protocol version >= 70001
 ---------------------------------------------------------------------
 [---MESSAGE---]
-[ 4] MAGIC_NUMBER   (\xF9\xBE\xB4\xD9)                      uint32_t
+[ 4] MAGIC_NUMBER   (\xFB\xC0\xB6\xDB)                      uint32_t
 [12] COMMAND                                                char[12]
 [ 4] LENGTH         <I ( len(payload) )                     uint32_t
 [ 4] CHECKSUM       ( sha256(sha256(payload))[:4] )         uint32_t
@@ -93,17 +93,19 @@ import socks
 import struct
 import sys
 import time
+import logging
 from base64 import b32decode, b32encode
 from cStringIO import StringIO
 from operator import itemgetter
 
-MAGIC_NUMBER = "\xF9\xBE\xB4\xD9"
-PROTOCOL_VERSION = 70001
+MAGIC_NUMBER = "\xFB\xC0\xB6\xDB"
+PROTOCOL_VERSION = 70002
 SERVICES = 1
-USER_AGENT = "/getaddr.bitnodes.io:0.1/"
-HEIGHT = 324000
+USER_AGENT = "/getaddr.bitnodes-litecoin.io:0.1/"
+# @TODO This really should  be dynamic
+HEIGHT = 703000
 RELAY = 1  # set to 1 to receive all txs
-DEFAULT_PORT = 8333
+DEFAULT_PORT = 9333
 
 SOCKET_BUFSIZE = 8192
 SOCKET_TIMEOUT = 15
@@ -187,6 +189,9 @@ class Serializer(object):
         # This is set prior to throwing PayloadTooShortError exception to
         # allow caller to fetch more data over the network.
         self.required_len = 0
+
+    def set_height(self, height):
+        self.height = height
 
     def serialize_msg(self, **kwargs):
         command = kwargs['command']
@@ -505,9 +510,11 @@ class Connection(object):
         msg = self.serializer.serialize_msg(
             command="version", to_addr=self.to_addr, from_addr=self.from_addr)
         self.send(msg)
+        logging.debug('command - version')
 
         # <<< [version 124 bytes] [verack 24 bytes]
         msgs = self.get_messages(length=148, commands=["version", "verack"])
+        logging.debug('received verack {}'.format(msgs))
         if len(msgs) > 0:
             msgs[:] = sorted(msgs, key=itemgetter('command'), reverse=True)
 
@@ -517,9 +524,11 @@ class Connection(object):
         # [getaddr] >>>
         msg = self.serializer.serialize_msg(command="getaddr")
         self.send(msg)
+        logging.debug('command getaddr')
 
         # <<< [addr]..
         msgs = self.get_messages(commands=["addr"])
+        logging.debug('received {}'.format(msgs))
 
         return msgs
 
@@ -535,10 +544,14 @@ class Connection(object):
         # [pong] >>>
         msg = self.serializer.serialize_msg(command="pong", nonce=nonce)
         self.send(msg)
+        
+    def set_height(self, height):
+        self.serializer.set_height(height)
 
 
 def main():
-    to_addr = ("148.251.238.178", 8333)
+    # @TODO Should just be a host from DNS seeds, no static host
+    to_addr = ("84.24.40.123", 9333)
 
     handshake_msgs = []
     addr_msgs = []
