@@ -3,6 +3,9 @@ from __future__ import absolute_import
 from adapters.abstractstorage import Abstractstorage
 
 class mysql(Abstractstorage):
+    
+    locks = []
+    
     def __init__(self, settings):
         print "Must init"
         import mysql.connector
@@ -34,4 +37,16 @@ class mysql(Abstractstorage):
         cursor.execute(stmt, stmt_data)
         self.connection.commit();
         cursor.close()
+        
+    # Checkout a random node which hasn't been checked in the last XX mintus
+    # Also care for locking so no 2 workers check out the same host
+    def getNextNode(self):
+        # Read lock the table
+        self.connection.cursor().execute("LOCK TABLES nodes READ")
+        
+        self.connection.cursor().execute("SELECT * FROM nodes")
+        
+        
+        self.connection.cursor().execute("UNLOCK TABLES")
+        
         

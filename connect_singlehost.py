@@ -3,8 +3,9 @@
 import sys
 import socket
 import logging
-import pprint
 import time
+import gevent
+import random
 
 from ConfigParser import ConfigParser
 
@@ -39,33 +40,38 @@ def main(argv):
                             user_agent=SETTINGS['user_agent'],
                             height=height)
 
-    try:
-        logging.debug("Connecting to {}".format(connection.to_addr))
-        connection.open()
-        handshake_msgs = connection.handshake()
-        
-        # Update node
-        storage.updateNode(address, 9333, handshake_msgs[0].get('height', 0))
-        
-        # Expand the network
-        addr_msgs = connection.getaddr()
-        for addr_msg in addr_msgs:
-            if 'addr_list' in addr_msg:
-                for peer in addr_msg['addr_list']:
-                    age = int(time.time()) - peer['timestamp']  # seconds
-                    address = peer['ipv4'] if peer['ipv4'] else peer['ipv6']
-                    port = peer['port'] if peer['port'] > 0 else 9333
-                    
-                    if age < 86400:
-                        storage.insertNode(address, port)
-        
-        
-    except (ProtocolError, ConnectionError, socket.error) as err:
-        logging.debug("{}: {}".format(connection.to_addr, err))
-    finally:
-        connection.close()
+#     try:
+#         logging.debug("Connecting to {}".format(connection.to_addr))
+#         connection.open()
+#         handshake_msgs = connection.handshake()
+#         
+#         # Update node
+#         storage.updateNode(address, 9333, handshake_msgs[0].get('height', 0))
+#         
+#         # Expand the network
+#         addr_msgs = connection.getaddr()
+#         for addr_msg in addr_msgs:
+#             if 'addr_list' in addr_msg:
+#                 for peer in addr_msg['addr_list']:
+#                     age = int(time.time()) - peer['timestamp']  # seconds
+#                     address = peer['ipv4'] if peer['ipv4'] else peer['ipv6']
+#                     port = peer['port'] if peer['port'] > 0 else 9333
+#                     
+#                     if age < 86400:
+#                         storage.insertNode(address, port)
+#         
+#         
+#     except (ProtocolError, ConnectionError, socket.error) as err:
+#         logging.debug("{}: {}".format(connection.to_addr, err))
+#     finally:
+#         connection.close()
     
-        
+    workers = []
+    for _ in xrange(100):
+        workers.append(gevent.spawn(task, _, storage))
+    
+    gevent.joinall(workers)
+
     
     return 0
 
@@ -101,7 +107,10 @@ def redefinelogging():
     ch.setFormatter(formatter)
     root.addHandler(ch)
 
-
+def task(i, storage):
+    while True:
+        
+        gevent.sleep(5)
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv))
